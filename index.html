@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>DoDos 2D Physics Engine</title>
+ <style rel="stylesheet" href="style.css">
+  body{
+    background-color: gray;
+  }
+
+  canvas { background: #111; display: block; margin: auto; }
+button {
+  position: absolute;
+  left: 8%;
+  padding: 10px 20px;
+  font-size: 16px;
+  cursor: pointer;
+  border-radius: 5px;
+  background-color: black;
+  color: white;
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+#resetBtn { top: 5%; }
+#draggOnBtn { top: 10%; }
+#draggOffBtn { top: 15%; }
+#startBtn { top: 20%; }
+#stopBtn { top: 25%; }
+#collideOnBtn { position: absolute; top: 30%; left: 8%; }
+#collideOffBtn { position: absolute; top: 35%; left: 8%; }
+
+
+button:hover {
+  background-color: rgb(62, 71, 77);
+  color: white;
+}
+
+
+
+ </style>
+</head>
+<body>
+ <canvas id="canvas" width="2000" height="1000"></canvas>
+
+  <button id="resetBtn">RESET</button>
+  <button id="draggOnBtn">drag on</button>
+  <button id="draggOffBtn">drag off</button>
+  <button id="startBtn">Start Auto Spawn</button>
+  <button id="stopBtn">Stop Auto Spawn</button>
+<button id="collideOnBtn">Collisions ON</button>
+<button id="collideOffBtn">Collisions OFF</button>
+
+  <script src="index.js" defer></script>
+
+</body>
+</html>
