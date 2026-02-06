@@ -1,5 +1,61 @@
 let collisionsEnabled = true; // true = balls collide, false = ignore collisions
 
+let saulAutoSpawnInterval = null;
+
+
+
+
+let autoClickerInterval = null;
+
+const ballImage = new Image();
+ballImage.src = "image.png"; // make sure image.png is in the same folder
+
+let saulsMode = false;   // Saul's Mode off by default
+let shakeAmount = 9999999;
+let shakeDecay = 99999;
+let shakeOffset = { x: 0, y: 0 };
+
+
+
+
+const shakeStrength = 10; // how strong the shake is
+
+function draw() {
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+
+  if (!saulsMode) {
+    // NORMAL MODE → fading trail
+    ctx.fillStyle = "rgba(0, 0, 0, 0.15)";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+  }
+  // SAUL MODE → NO CLEARING (permanent trail)
+
+  for (let body of bodies) {
+    if (saulsMode && ballImage.complete) {
+      // Saul image
+      ctx.drawImage(
+        ballImage,
+        body.position.x - body.radius,
+        body.position.y - body.radius,
+        body.radius * 2,
+        body.radius * 2
+      );
+    } else {
+      // Normal white ball
+      ctx.beginPath();
+      ctx.arc(body.position.x, body.position.y, body.radius, 0, Math.PI * 2);
+      ctx.fillStyle = "white";
+      ctx.fill();
+    }
+  }
+}
+
+
+
+
+
+
+
 
 
 
@@ -138,10 +194,13 @@ function loop(time) {
   lastTime = time;
 
   update(dt);
-  draw();
+  draw(); // must be the draw() with Saul's Mode logic
 
   requestAnimationFrame(loop);
 }
+
+
+
 
 function update(dt) {
   for (let body of bodies) {
@@ -173,17 +232,6 @@ function update(dt) {
 }
 
 
-
-function draw() {
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-  for (let body of bodies) {
-    ctx.beginPath();
-    ctx.arc(body.position.x, body.position.y, body.radius, 0, Math.PI * 2);
-    ctx.fillStyle = "white";
-    ctx.fill();
-  }
-}
 
 requestAnimationFrame(loop);
 
@@ -230,10 +278,30 @@ stopBtn.addEventListener("click", () => {
   autoSpawnInterval = null; // reset so it can be started again
 });
 
-// Reset button
 resetBtn.addEventListener("click", () => {
-  bodies.length = 0; // remove all balls
+  bodies.length = 0;       // remove all balls
+  saulsMode = false;       // turn off Saul's Mode
+  shakeAmount = 0;         // stop shaking
+
+  // Stop all intervals
+  if (autoSpawnInterval) {
+    clearInterval(autoSpawnInterval);
+    autoSpawnInterval = null;
+  }
+  if (saulAutoSpawnInterval) {
+    clearInterval(saulAutoSpawnInterval);
+    saulAutoSpawnInterval = null;
+  }
+  if (autoClickerInterval) {
+    clearInterval(autoClickerInterval);
+    autoClickerInterval = null;
+  }
+
+  // Stop drag
+  isDragging = false;
 });
+
+
 
 canvas.addEventListener("click", (e) => {
   const rect = canvas.getBoundingClientRect();
@@ -266,5 +334,209 @@ const collideOffBtn = document.getElementById("collideOffBtn");
 collideOnBtn.addEventListener("click", () => collisionsEnabled = true);
 collideOffBtn.addEventListener("click", () => collisionsEnabled = false);
 
+let mouseX = 0;
+let mouseY = 0;
 
+let mouseOverCanvas = false;
+
+canvas.addEventListener("mouseenter", () => {
+  mouseOverCanvas = true;
+});
+
+canvas.addEventListener("mouseleave", () => {
+  mouseOverCanvas = false;
+});
+
+canvas.addEventListener("mousemove", (e) => {
+  const rect = canvas.getBoundingClientRect();
+  mouseX = e.clientX - rect.left;
+  mouseY = e.clientY - rect.top;
+});
+
+const autoClickerBtn = document.getElementById("autoClickerBtn");
+const autoClickerOffBtn = document.getElementById("autoClickerOffBtn");
+
+
+
+function dispatchClick() {
+  const rect = canvas.getBoundingClientRect();
+  const event = new MouseEvent("click", {
+    clientX: rect.left + mouseX,
+    clientY: rect.top + mouseY,
+    bubbles: true
+  });
+
+  canvas.dispatchEvent(event);
+}
+
+function startAutoClicker() {
+  if (autoClickerInterval) return; // already running
+
+  autoClickerInterval = setInterval(() => {
+    if (mouseOverCanvas) dispatchClick(); // only click if mouse is inside
+  }, 20); // 20 clicks per second
+}
+
+
+function stopAutoClicker() {
+  clearInterval(autoClickerInterval);
+  autoClickerInterval = null;
+}
+
+
+
+
+
+
+// Buttons
+autoClickerBtn.addEventListener("click", startAutoClicker);
+autoClickerOffBtn.addEventListener("click", stopAutoClicker);
+
+const rgbButton = document.getElementById("saulsModeBtn");
+
+let hue = 0; // starting hue
+
+function updateButtonColor() {
+  // HSL works well for smooth color cycling
+  rgbButton.style.backgroundColor = `hsl(${hue}, 100%, 50%)`;
+
+  // increment hue for next frame
+  hue = (hue + 1) % 360;
+
+  requestAnimationFrame(updateButtonColor); // keep updating
+}
+
+// Start the RGB cycle
+updateButtonColor();
+
+// Wait for image to load first
+ballImage.onload = () => {
+  requestAnimationFrame(loop);
+};
+
+const saulsModeBtn = document.getElementById("saulsModeBtn");
+
+saulsModeBtn.addEventListener("click", () => {
+  saulsMode = !saulsMode; // toggle Saul Mode
+
+  if (saulsMode) {
+    // Start shaking
+    shakeAmount = 10;
+
+    // Start the dynamic auto-spawn
+    if (!saulAutoSpawnInterval) {
+      saulAutoSpawnInterval = setInterval(() => {
+        const saulCount = countSaulBalls();
+        let interval = 1000 / 50; // default 30 per second
+        let spawnCount = 1;
+
+        if (saulCount > 50) {
+          interval = 1000 / 5; // 5 per second
+        }
+
+        const x = Math.random() * canvas.width;
+        const y = Math.random() * canvas.height / 2;
+        bodies.push(new Body(x, y, 12));
+
+      }, 30); // default ~30 per sec (1000ms / 30 ≈ 33ms)
+    }
+  } else {
+    // Stop shaking
+    shakeAmount = 0;
+
+    // Stop Saul Mode auto-spawn
+    if (saulAutoSpawnInterval) {
+      clearInterval(saulAutoSpawnInterval);
+      saulAutoSpawnInterval = null;
+    }
+  }
+});
+
+const bgMusic = new Audio("song.mp3");
+bgMusic.loop = true; // loop the song
+
+// Play immediately (or after a button click)
+function playMusic() {
+  bgMusic.play().catch(e => console.log("User interaction required to play music."));
+}
+
+// Pause music
+function pauseMusic() {
+  bgMusic.pause();
+}
+
+// Optional: add buttons
+const playBtn = document.getElementById("playMusicBtn");
+const pauseBtn = document.getElementById("pauseMusicBtn");
+
+playBtn.addEventListener("click", playMusic);
+pauseBtn.addEventListener("click", pauseMusic);
+
+
+
+
+resetBtn.addEventListener("click", () => {
+  bodies.length = 0;       // remove all balls
+  saulsMode = false;       // turn off Saul's Mode
+  shakeAmount = 0;         // stop shaking
+});
+
+function updateBackground() {
+  if (saulsMode && ballImage.complete) {
+    // Set body background to the image
+    document.body.style.backgroundImage = `url(${ballImage.src})`;
+    document.body.style.backgroundSize = "cover";
+    document.body.style.backgroundPosition = "center";
+    
+    // Add RGB side borders using a gradient
+    const borderWidth = 50; // width of colored sides
+    document.body.style.background = `
+      linear-gradient(
+        to right,
+        hsl(${hue}, 100%, 50%) ${borderWidth}px,
+        transparent ${borderWidth}px,
+        transparent calc(100% - ${borderWidth}px),
+        hsl(${(hue + 180) % 360}, 100%, 50%) calc(100% - ${borderWidth}px),
+        hsl(${(hue + 180) % 360}, 100%, 50%) 100%
+      ),
+      url(${ballImage.src})
+    `;
+    document.body.style.backgroundSize = "cover";
+    document.body.style.backgroundRepeat = "no-repeat";
+  } else {
+    // Reset background
+    document.body.style.background = "gray";
+  }
+}
+
+// Call this every frame
+function loop(time) {
+  const dt = (time - lastTime) / 1000;
+  lastTime = time;
+
+  update(dt);
+  draw();
+  updateBackground(); // update the page background
+
+  requestAnimationFrame(loop);
+}
+
+function updateBackgroundShake() {
+  if (saulsMode) {
+    const shakeX = (Math.random() - 0.5) * 20; // horizontal shake
+    const shakeY = (Math.random() - 0.5) * 20; // vertical shake
+    document.body.style.transform = `translate(${shakeX}px, ${shakeY}px)`;
+  } else {
+    document.body.style.transform = `translate(0, 0)`; // reset
+  }
+
+  requestAnimationFrame(updateBackgroundShake);
+}
+
+// Start the shaking loop
+updateBackgroundShake();
+
+function countSaulBalls() {
+  return bodies.length; // all balls are considered Saul balls in Saul Mode
+}
 

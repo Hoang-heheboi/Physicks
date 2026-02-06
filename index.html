@@ -3,14 +3,19 @@
 <head>
   <title>DoDos 2D Physics Engine</title>
  <style rel="stylesheet" href="style.css">
-  body{
-    background-color: gray;
-  }
+body {
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  background: url('image.png') no-repeat center center fixed;
+  background-size: cover;
+  transition: transform 0.05s linear;
+}
+
 
   canvas { background: #111; display: block; margin: auto; }
 button {
   position: absolute;
-  left: 4%;
   padding: 10px 20px;
   font-size: 16px;
   cursor: pointer;
@@ -20,21 +25,32 @@ button {
   transition: background-color 0.3s ease, color 0.3s ease;
 }
 
-#resetBtn { top: 5%; }
-#draggOnBtn { top: 10%; }
-#draggOffBtn { top: 15%; }
-#startBtn { top: 20%; }
-#stopBtn { top: 25%; }
-#collideOnBtn { position: absolute; top: 30%;  }
-#collideOffBtn { position: absolute; top: 35%;  }
-
+#resetBtn { top: 5%; left: 4%;}
+#draggOnBtn { top: 10%; left: 4%;}
+#draggOffBtn { top: 15%; left: 4%;}
+#startBtn { top: 20%; left: 4%;}
+#stopBtn { top: 25%; left: 4%;}
+#collideOnBtn { position: absolute; top: 30%; left: 4%; }
+#collideOffBtn { position: absolute; top: 35%; left: 4%; }
+#autoClickerBtn { position: absolute; top: 40%;  left: 4%;}
+#autoClickerOffBtn { position: absolute; top: 45%;  left: 4%;}
 
 button:hover {
   background-color: rgb(62, 71, 77);
   color: white;
 }
-
-
+#playMusicBtn { position: absolute; top: 10%; right: 4%; }
+#pauseMusicBtn { position: absolute; top: 15%; right: 4%; }
+#saulsModeBtn { position: absolute; top: 50%;  left: 4%;
+  cursor: pointer;
+  transition: background 0.2s;}
+#Version{
+  position: absolute;
+  top: 90%;
+  left: 4%;
+  font-size: 14px;
+  color: white;
+}
 
  </style>
 </head>
@@ -48,6 +64,14 @@ button:hover {
   <button id="stopBtn">Stop Auto Spawn</button>
 <button id="collideOnBtn">Collisions ON</button>
 <button id="collideOffBtn">Collisions OFF</button>
+<button id="autoClickerBtn">AutoClicker ON</button>
+<button id="autoClickerOffBtn">AutoClicker OFF</button>
+<button id="saulsModeBtn">Sauls MODE</button>
+<audio id="bgMusic" src="song.mp3" loop></audio>
+<button id="playMusicBtn">Play Music</button>
+<button id="pauseMusicBtn">Pause Music</button>
+
+<p id="Version">By: Hoang, Version 0.01</p>
 
   <script src="index.js" defer></script>
 
