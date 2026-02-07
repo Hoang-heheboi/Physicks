@@ -509,32 +509,31 @@ function updateBackground() {
   }
 }
 
-// Call this every frame
 function loop(time) {
   const dt = (time - lastTime) / 1000;
   lastTime = time;
 
   update(dt);
   draw();
-  updateBackground(); // update the page background
+  updateBackground();
+  shakePage(); // 👈 THIS IS THE KEY
 
   requestAnimationFrame(loop);
 }
 
-function updateBackgroundShake() {
-  if (saulsMode) {
-    const shakeX = (Math.random() - 0.5) * 20; // horizontal shake
-    const shakeY = (Math.random() - 0.5) * 20; // vertical shake
-    document.body.style.transform = `translate(${shakeX}px, ${shakeY}px)`;
-  } else {
-    document.body.style.transform = `translate(0, 0)`; // reset
+
+function shakePage() {
+  if (!saulsMode) {
+    document.body.style.transform = "translate(0, 0)";
+    return;
   }
 
-  requestAnimationFrame(updateBackgroundShake);
+  const x = (Math.random() - 0.5) * 30;
+  const y = (Math.random() - 0.5) * 30;
+
+  document.body.style.transform = `translate(${x}px, ${y}px)`;
 }
 
-// Start the shaking loop
-updateBackgroundShake();
 
 function countSaulBalls() {
   return bodies.length; // all balls are considered Saul balls in Saul Mode
