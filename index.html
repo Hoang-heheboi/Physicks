@@ -1,76 +1,930 @@
+
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <title>DoDos 2D Physics Engine</title>
- <style rel="stylesheet" href="style.css">
-body {
-  margin: 0;
-  padding: 0;
-  overflow: hidden;
-  background: url('image.png') no-repeat center center fixed;
-  background-size: cover;
-  transition: transform 0.05s linear;
+<meta charset="UTF-8">
+<title>DoDos Physics Sandbox</title>
+
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+
+body{
+background:#111;
+color:white;
+font-family:Segoe UI,Arial;
+overflow:hidden;
 }
 
-
-  canvas { background: #111; display: block; margin: auto; }
-button {
-  position: absolute;
-  padding: 10px 20px;
-  font-size: 16px;
-  cursor: pointer;
-  border-radius: 5px;
-  background-color: black;
-  color: white;
-  transition: background-color 0.3s ease, color 0.3s ease;
+canvas{
+display:block;
+margin:20px auto;
+border-radius:14px;
+border:2px solid rgba(255,255,255,0.15);
+background:radial-gradient(circle,#222,#111);
 }
 
-#resetBtn { top: 5%; left: 4%;}
-#draggOnBtn { top: 10%; left: 4%;}
-#draggOffBtn { top: 15%; left: 4%;}
-#startBtn { top: 20%; left: 4%;}
-#stopBtn { top: 25%; left: 4%;}
-#collideOnBtn { position: absolute; top: 30%; left: 4%; }
-#collideOffBtn { position: absolute; top: 35%; left: 4%; }
-#autoClickerBtn { position: absolute; top: 40%;  left: 4%;}
-#autoClickerOffBtn { position: absolute; top: 45%;  left: 4%;}
+#panel{
+position:fixed;
+top:20px;
+left:20px;
+display:flex;
+flex-direction:column;
+gap:10px;
+padding:20px;
 
-button:hover {
-  background-color: rgb(62, 71, 77);
-  color: white;
+border-radius:16px;
+background:linear-gradient(135deg,rgba(150,0,255,.25),rgba(0,180,255,.25));
+backdrop-filter:blur(14px);
+border:1px solid rgba(255,255,255,.2);
 }
 
-#saulsModeBtn { position: absolute; top: 50%;  left: 4%;
-  cursor: pointer;
-  transition: background 0.2s;}
-#Version{
-  position: absolute;
-  top: 90%;
-  left: 4%;
-  font-size: 14px;
-  color: white;
+button{
+padding:9px 14px;
+border-radius:10px;
+border:none;
+cursor:pointer;
+font-weight:bold;
+color:white;
+background:rgba(255,255,255,.12);
+transition:.25s;
 }
 
- </style>
+button:hover{
+transform:scale(1.05);
+background:rgba(255,255,255,.25);
+}
+
+#ver{
+position:fixed;
+bottom:20px;
+left:20px;
+font-size:13px;
+color:#aaa;
+}
+</style>
 </head>
+
 <body>
- <canvas id="canvas" width="1000" height="650"></canvas>
 
-  <button id="resetBtn">RESET</button>
-  <button id="draggOnBtn">drag on</button>
-  <button id="draggOffBtn">drag off</button>
-  <button id="startBtn">Start Auto Spawn</button>
-  <button id="stopBtn">Stop Auto Spawn</button>
-<button id="collideOnBtn">Collisions ON</button>
-<button id="collideOffBtn">Collisions OFF</button>
-<button id="autoClickerBtn">AutoClicker ON</button>
-<button id="autoClickerOffBtn">AutoClicker OFF</button>
-<button id="saulsModeBtn">Sauls MODE</button>
+<canvas id="canvas" width="1000" height="600"></canvas>
+
+<div id="panel">
+<button id="reset">RESET</button>
+<button id="drag">Drag OFF</button>
+<button id="collide">Collisions ON</button>
+<button id="rgb">RGB OFF</button>
+<button id="saul">Saul OFF</button>
+<button id="ian">Ian OFF</button>
+</div>
+
+<p id="ver">Physics Sandbox</p>
+
+<script>
+
+const canvas=document.getElementById("canvas")
+const ctx=canvas.getContext("2d")
+
+let balls=[]
+let blocks=[]
+let particles=[] // for explosion effects
+let explosionFlash = 0 // white flash timer
+let trail = [] // permanent trail for Saul mode
+let maxTrail = 1000
+let shakeX = 0, shakeY = 0, shakeTime = 0
+// grid stacking state
+let columnStacks = [] // number of blocks in each column
+let columnLayers = [] // actual ordered layers for each column
+let nextCol = 0 // which column to fill next
+const blockSize = 32
+
+// prototype layer order (thickness will be randomized per column)
+const baseLayers = ['deepslate','stone','dirt','grassblock']
+
+// compute total rows available (limit to half the canvas height)
+const maxRows = Math.floor(canvas.height / blockSize / 2)
+const maxParticles = 1000
+const maxBalls = 100
 
 
-<p id="Version">By: Hoang, Version 0.01</p>
+let gravity=.5
 
-  <script src="index.js" defer></script>
+let drag=false
+let collisions=true // collisions forced on
+let rgb=false
+let saul=false
+let ian=false
 
+let draggedBall = null
+let isDragging = false
+let lastCleanup = 0
+let frameSkip = 0
+let hue=0
+
+const saulImg=new Image()
+saulImg.src="image.png"
+
+const blockImgs={
+    stone:new Image(),
+    iron:new Image(),
+    gold:new Image(),
+    diamond:new Image(),
+    lapis:new Image(),
+    redstone:new Image(),
+    deepslate:new Image(),
+    deepslate_iron:new Image(),
+    deepslate_gold:new Image(),
+    deepslate_diamond:new Image(),
+    deepslate_lapis:new Image(),
+    deepslate_redstone:new Image(),
+    dirt:new Image(),
+    grassblock:new Image(),
+    tnt:new Image(),
+    // bedrock and deepslate_stone will reuse deepslate image
+}
+
+blockImgs.stone.src="stone.png"
+blockImgs.iron.src="iron ore.png"
+blockImgs.gold.src="gold ore.png"
+blockImgs.diamond.src="diamond ore.png"
+blockImgs.lapis.src="lapis ore.png"
+blockImgs.redstone.src="Redstone ore.png"
+blockImgs.deepslate.src="Deepslate.png"
+blockImgs.deepslate_iron.src="Deepslate iron.png"
+blockImgs.deepslate_gold.src="Deepslate gold.png"
+blockImgs.deepslate_diamond.src="Deepslate diamond.png"
+blockImgs.deepslate_lapis.src="Deepslate Lapis.png"
+blockImgs.deepslate_redstone.src="Deepslate redstone.png"
+blockImgs.dirt.src="dirt.png"
+blockImgs.grassblock.src="grassblock.png"
+blockImgs.tnt.src="tnt.png"
+
+// simple spawn control removed (random x used)
+
+
+class Ball{
+
+constructor(x,y,isTNT=false){
+
+    this.x=x
+    this.y=y
+
+    this.vx=0
+    this.vy=0
+
+    this.r=12
+    this.mass=1 // light ball
+
+    this.stuck = 0 // frames of near‑zero motion
+    this.superStuck = 0 // counter for super stuck
+    this.exploding = false // prevent multiple explosions
+    this.isTNT = isTNT // is this a TNT ball
+}
+
+update(){
+
+// skip physics if this ball is being dragged
+if(isDragging && draggedBall === this) return
+
+this.vy+=gravity
+
+this.x+=this.vx
+this.y+=this.vy
+
+if(this.x-this.r<0){
+this.x=this.r
+this.vx*=-.4
+}
+
+if(this.x+this.r>canvas.width){
+this.x=canvas.width-this.r
+this.vx*=-.4
+}
+
+if(this.y+this.r>canvas.height){
+this.y=canvas.height-this.r
+this.vy*=-.35
+}
+
+// detect stuck condition: touching a block and almost no velocity
+let touchingBlock = blocks.some(block=>
+    this.x + this.r > block.x && this.x - this.r < block.x+block.size &&
+    this.y + this.r > block.y && this.y - this.r < block.y+block.size
+)
+if(touchingBlock && Math.abs(this.vx) < 0.5 && Math.abs(this.vy) < 0.5){
+    this.stuck++
+}else{
+    this.stuck = 0
+}
+if(this.stuck > 15){
+    this.explode()
+    this.superStuck++
+}
+if(this.superStuck > 8){
+    this.superExplode()
+    this.superStuck = 0
+}
+
+}
+
+explode(){
+    if(this.exploding) return
+    this.exploding = true
+    explosionFlash = 15 // trigger white flash
+    explodeAt(this.x, this.y)
+    // trigger chain reaction with nearby TNT
+    this.triggerChainReaction()
+    // remove the TNT ball after explosion
+    balls = balls.filter(b => b !== this)
+}
+
+triggerChainReaction(){
+    // find other TNT balls nearby and make them explode too
+    for(let other of balls){
+        if(other === this || other.exploding) continue
+        let dist = Math.sqrt((other.x-this.x)**2 + (other.y-this.y)**2)
+        if(dist < blockSize * 2 && dist > 0){
+            other.stuck = 0
+            other.superStuck = 0
+            other.triggerChainReaction()
+            setTimeout(()=>{ if(balls.includes(other)) other.superExplode() }, 50)
+        }
+    }
+}
+
+superExplode(){
+    if(this.exploding) return
+    this.exploding = true
+    // massive TNT explosion
+    this.superExplode_impl()
+    // remove the TNT ball after explosion
+    balls = balls.filter(b => b !== this)
+}
+
+superExplode_impl(){
+    // shake the screen
+    shakeX = (Math.random() - 0.5) * 20
+    shakeY = (Math.random() - 0.5) * 20
+    shakeTime = 15
+    const col = Math.floor(this.x / blockSize)
+    const row = Math.floor(this.y / blockSize)
+    const removed = []
+    blocks = blocks.filter(b=>{
+        const bc = Math.floor(b.x / blockSize)
+        const br = Math.floor(b.y / blockSize)
+        if(Math.abs(bc-col)<=1 && Math.abs(br-row)<=1){
+            removed.push(b)
+            return false
+        }
+        return true
+    })
+    // create MANY particles with better spread
+    for(let b of removed){
+        for(let i=0;i<20;i++){
+            particles.push({
+                x: b.x + blockSize/2,
+                y: b.y + blockSize/2,
+                vx: (Math.random()-0.5)*14,
+                vy: (Math.random()-0.5)*14 - 3,
+                life: 50,
+                color: i < 6 ? '#ffffff' : '#'+Math.floor(Math.random()*16777215).toString(16),
+                size: 4 + Math.random()*2
+            })
+        }
+    }
+    explosionFlash = 20
+}
+
+draw(){
+
+if((ian || this.isTNT) && blockImgs.tnt.complete){
+    ctx.drawImage(blockImgs.tnt, this.x-this.r, this.y-this.r, this.r*2, this.r*2)
+    return
+}
+
+if(saul && saulImg.complete){
+
+ctx.drawImage(
+saulImg,
+this.x-this.r,
+this.y-this.r,
+this.r*2,
+this.r*2
+)
+
+return
+}
+
+ctx.beginPath()
+ctx.arc(this.x,this.y,this.r,0,Math.PI*2)
+
+if(rgb){
+
+let c=`hsl(${(hue+this.x)%360},100%,60%)`
+ctx.fillStyle=c
+ctx.shadowBlur=15
+ctx.shadowColor=c
+
+}else{
+
+ctx.fillStyle="white"
+ctx.shadowBlur=0
+
+}
+
+ctx.fill()
+
+}
+
+}
+
+class Block{
+
+constructor(x,img,targetY){
+
+    this.x=x
+    this.y=-40
+    this.vy=0
+    this.size=blockSize
+    this.img=img
+    this.targetY = targetY
+
+}
+
+update(){
+
+    this.vy+=gravity
+    this.y+=this.vy
+
+    if(this.targetY!==undefined && this.y+this.size>this.targetY){
+        this.y=this.targetY-this.size
+        this.vy=0
+    }
+
+}
+
+draw(){
+
+ctx.drawImage(
+this.img,
+this.x,
+this.y,
+this.size,
+this.size
+)
+
+}
+
+}
+
+canvas.onclick = e => {
+    if(isDragging) return // don't spawn while dragging
+    if(balls.length >= maxBalls) return;
+
+    const rect=canvas.getBoundingClientRect()
+    const x = e.clientX-rect.left
+    const y = e.clientY-rect.top
+
+    if(ian){
+        // spawn TNT ball in Ian mode
+        balls.push(new Ball(x, y, true))
+    } else {
+        // spawn regular ball
+        balls.push(new Ball(x, y, false))
+    }
+
+}
+
+canvas.onmousedown = e => {
+    if(!drag) return
+    const rect = canvas.getBoundingClientRect()
+    const x = e.clientX - rect.left
+    const y = e.clientY - rect.top
+    
+    // find ball at click position
+    for(let ball of balls){
+        if(!ball) continue
+        let dist = Math.sqrt((ball.x - x)**2 + (ball.y - y)**2)
+        if(dist < ball.r){
+            isDragging = true
+            draggedBall = ball
+            draggedBall.vx = 0
+            draggedBall.vy = 0
+            e.preventDefault()
+            return
+        }
+    }
+}
+
+canvas.onmousemove = e => {
+    if(!isDragging || !draggedBall || !balls.includes(draggedBall)) return
+    
+    const rect = canvas.getBoundingClientRect()
+    const x = e.clientX - rect.left
+    const y = e.clientY - rect.top
+    
+    draggedBall.x = Math.max(draggedBall.r, Math.min(x, canvas.width - draggedBall.r))
+    draggedBall.y = Math.max(draggedBall.r, Math.min(y, canvas.height - draggedBall.r))
+    draggedBall.vx = 0
+    draggedBall.vy = 0
+}
+
+canvas.onmouseup = e => {
+    isDragging = false
+    draggedBall = null
+}
+
+function cleanupStale(){
+    const now = performance.now()
+    if(now - lastCleanup < 1000) return // cleanup max once per second
+    lastCleanup = now
+    
+    // remove balls that are null or far off screen
+    balls = balls.filter(b => b && (b.x > -150 && b.x < canvas.width + 150 && b.y > -150 && b.y < canvas.height + 150))
+    
+    // aggressively limit particles
+    while(particles.length > maxParticles * 0.7){
+        particles.shift()
+    }
+    
+    // limit blocks in memory
+    if(blocks.length > 500){
+        blocks = blocks.filter(b => b.y < canvas.height + 100)
+    }
+}
+
+function resolveCollisions(){
+    for(let i=0;i<balls.length;i++){
+        for(let j=i+1;j<balls.length;j++){
+            let a=balls[i]
+            let b=balls[j]
+            let dx=b.x-a.x
+            let dy=b.y-a.y
+            let dist=Math.hypot(dx,dy)
+            let min=a.r+b.r
+            if(dist<min){
+                let angle=Math.atan2(dy,dx)
+                let overlap=min-dist
+                a.x-=Math.cos(angle)*overlap*.5
+                a.y-=Math.sin(angle)*overlap*.5
+                b.x+=Math.cos(angle)*overlap*.5
+                b.y+=Math.sin(angle)*overlap*.5
+                let vx=b.vx-a.vx
+                let vy=b.vy-a.vy
+                let impact=vx*Math.cos(angle)+vy*Math.sin(angle)
+                if(impact>0) continue
+                let impulse=impact*.4
+                a.vx+=Math.cos(angle)*impulse
+                a.vy+=Math.sin(angle)*impulse
+                b.vx-=Math.cos(angle)*impulse
+                b.vy-=Math.sin(angle)*impulse
+            }
+        }
+    }
+}
+
+/* function resolveBlockCollisions(){
+
+for(let i=0;i<blocks.length;i++){
+
+for(let j=i+1;j<blocks.length;j++){
+
+let a=blocks[i]
+let b=blocks[j]
+
+if(a.x < b.x + b.size && a.x + a.size > b.x && a.y < b.y + b.size && a.y + a.size > b.y){
+
+let overlapX = Math.min(a.x + a.size - b.x, b.x + b.size - a.x)
+let overlapY = Math.min(a.y + a.size - b.y, b.y + b.size - a.y)
+
+if(overlapY <= overlapX){
+
+if(a.y < b.y){
+
+a.y -= overlapY
+a.vy = 0
+
+}else{
+
+b.y -= overlapY
+b.vy = 0
+
+}
+
+}else{
+
+if(a.x < b.x){
+
+a.x -= overlapX * 0.5
+b.x += overlapX * 0.5
+
+}else{
+
+a.x += overlapX * 0.5
+b.x -= overlapX * 0.5
+
+}
+
+}
+
+}
+
+for(let ball of balls){
+
+for(let block of blocks){
+
+if(ball.x + ball.r > block.x && ball.x - ball.r < block.x + block.size && ball.y + ball.r > block.y && ball.y - ball.r < block.y + block.size){
+
+let left = (ball.x - ball.r) - (block.x + block.size)
+let right = block.x - (ball.x + ball.r)
+let top = (ball.y - ball.r) - (block.y + block.size)
+let bottom = block.y - (ball.y + ball.r)
+
+let maxPush = Math.max(left, right, top, bottom)
+
+if(maxPush == left){
+
+ball.x = block.x + block.size + ball.r
+if(ball.vx < 0) ball.vx *= -0.5
+
+}else if(maxPush == right){
+
+ball.x = block.x - ball.r
+if(ball.vx > 0) ball.vx *= -0.5
+
+}else if(maxPush == top){
+
+ball.y = block.y + block.size + ball.r
+if(ball.vy < 0) ball.vy *= -0.5
+
+}else if(maxPush == bottom){
+
+ball.y = block.y - ball.r
+if(ball.vy > 0) ball.vy *= -0.5
+
+}
+
+}
+
+}
+
+}
+
+}
+
+}
+
+}
+
+*/
+
+function spawnBlock(){
+    const cols = Math.floor(canvas.width / blockSize)
+    if(nextCol >= cols) return
+    let col = nextCol
+
+    // initialize layer list for column if needed
+    if(!columnLayers[col]){
+        let layers = []
+        // deepslate: 1-2 blocks
+        let dDepth = 1 + Math.floor(Math.random()*2)
+        for(let i=0;i<dDepth;i++) layers.push('deepslate')
+        // stone: 3-5 blocks
+        let sDepth = 3 + Math.floor(Math.random()*3)
+        for(let i=0;i<sDepth;i++) layers.push('stone')
+        // always end with dirt then grassblock
+        layers.push('dirt')
+        layers.push('grassblock')
+        columnLayers[col] = layers
+    }
+
+    if(columnStacks[col]===undefined) columnStacks[col]=0
+    if(columnStacks[col] >= columnLayers[col].length || columnStacks[col] >= maxRows){
+        nextCol++
+        return
+    }
+
+    let layer = columnLayers[col][columnStacks[col]]
+    let img
+    if(layer === 'deepslate'){
+        if(Math.random()<0.2){
+            const dOres = ['deepslate_iron','deepslate_gold','deepslate_diamond','deepslate_lapis','deepslate_redstone']
+            img = blockImgs[dOres[Math.floor(Math.random()*dOres.length)]]
+        } else {
+            img = blockImgs.deepslate
+        }
+    } else if(layer === 'stone'){
+        let r = Math.random()
+        if(r < 0.05) img = blockImgs.diamond
+        else if(r < 0.15) img = blockImgs.gold
+        else if(r < 0.35) img = blockImgs.iron
+        else if(r < 0.45) img = blockImgs.lapis || blockImgs.iron
+        else if(r < 0.52) img = blockImgs.redstone || blockImgs.iron
+        else img = blockImgs.stone
+    } else if(layer === 'dirt'){
+        img = blockImgs.dirt
+    } else if(layer === 'grassblock'){
+        img = blockImgs.grassblock
+    } else {
+        img = blockImgs.stone
+    }
+
+    const targetY = canvas.height - (columnStacks[col] + 1) * blockSize
+    const x = col * blockSize
+    const block = new Block(x, img, targetY)
+    blocks.push(block)
+
+    columnStacks[col]++
+    if(columnStacks[col] >= columnLayers[col].length || columnStacks[col] >= maxRows){
+        nextCol++
+    }
+}
+
+// destroy a 3x3 block area centered on (x,y)
+function explodeAt(x,y){
+    const col = Math.floor(x / blockSize)
+    const row = Math.floor(y / blockSize)
+    const removed = []
+    blocks = blocks.filter(b=>{
+        const bc = Math.floor(b.x / blockSize)
+        const br = Math.floor(b.y / blockSize)
+        if(Math.abs(bc-col)<=1 && Math.abs(br-row)<=1){
+            removed.push(b)
+            return false
+        }
+        return true
+    })
+    // create particles with white flash, but limit total
+    if(particles.length < maxParticles){
+        for(let b of removed){
+            for(let i=0;i<16 && particles.length < maxParticles;i++){
+                particles.push({
+                    x: b.x + blockSize/2,
+                    y: b.y + blockSize/2,
+                    vx: (Math.random()-0.5)*10,
+                    vy: (Math.random()-0.5)*10,
+                    life: 35,
+                    color: i < 4 ? '#ffffff' : '#'+Math.floor(Math.random()*16777215).toString(16),
+                    size: 3 + Math.random()*2
+                })
+            }
+        }
+    }
+    explosionFlash = 15
+}
+
+// collision between balls and blocks (blocks fixed)
+function resolveBallBlockCollisions(){
+    for(let ball of balls){
+        for(let block of blocks){
+            if(ball.x + ball.r > block.x && ball.x - ball.r < block.x + block.size &&
+               ball.y + ball.r > block.y && ball.y - ball.r < block.y + block.size){
+                let left = (ball.x - ball.r) - (block.x + block.size)
+                let right = block.x - (ball.x + ball.r)
+                let top = (ball.y - ball.r) - (block.y + block.size)
+                let bottom = block.y - (ball.y + ball.r)
+                let maxPush = Math.max(left, right, top, bottom)
+                if(maxPush == left){
+                    ball.x = block.x + block.size + ball.r
+                    ball.vx *= -0.5
+                } else if(maxPush == right){
+                    ball.x = block.x - ball.r
+                    ball.vx *= -0.5
+                } else if(maxPush == top){
+                    ball.y = block.y + block.size + ball.r
+                    ball.vy *= -0.5
+                } else if(maxPush == bottom){
+                    ball.y = block.y - ball.r
+                    ball.vy *= -0.5
+                }
+            }
+        }
+    }
+}
+
+setInterval(()=>{
+    if(ian) spawnBlock()
+},200)
+
+setInterval(()=>{
+    if(saul && balls.length < maxBalls){
+        balls.push(new Ball(Math.random() * canvas.width, Math.random() * canvas.height))
+    }
+},250)
+
+
+
+function update(){
+
+    balls.forEach(b=>b.update())
+
+    resolveCollisions()
+
+    blocks.forEach(b=>b.update())
+
+    resolveBallBlockCollisions()
+
+    // update particles
+    particles = particles.filter(p=>{
+        p.x += p.vx
+        p.y += p.vy
+        p.vy += gravity * 0.5
+        p.life--
+        return p.life > 0
+    })
+
+    // add to trail in Saul mode
+    if(saul){
+        for(let b of balls){
+            if(trail.length < maxTrail){
+                trail.push({x:b.x, y:b.y})
+            }
+        }
+    }
+
+    cleanupStale()
+
+}
+
+function draw(){
+
+if(saul){
+
+ctx.fillStyle="rgba(0,0,0,0.002)"
+
+}else{
+
+ctx.fillStyle="rgba(0,0,0,.15)"
+
+}
+
+ctx.fillRect(0,0,canvas.width,canvas.height)
+
+if(shakeTime > 0) ctx.translate(shakeX, shakeY)
+
+// draw permanent trail in Saul mode
+if(saul){
+    ctx.fillStyle = 'rgba(255,0,0,0.1)'
+    for(let p of trail){
+        ctx.fillRect(p.x-1, p.y-1, 2, 2)
+    }
+}
+
+balls.forEach(b=>b.draw())
+
+blocks.forEach(b=>b.draw())
+
+// draw particles
+for(let p of particles){
+    ctx.fillStyle = p.color
+    ctx.globalAlpha = Math.max(0, p.life / 35)
+    ctx.fillRect(p.x - (p.size||3), p.y - (p.size||3), (p.size||3)*2, (p.size||3)*2)
+    ctx.globalAlpha = 1
+}
+
+// draw white flash
+if(explosionFlash > 0){
+    ctx.fillStyle = `rgba(255,255,255,${explosionFlash/20})`
+    ctx.fillRect(0, 0, canvas.width, canvas.height)
+    explosionFlash--
+}
+
+if(shakeTime > 0){
+    ctx.translate(-shakeX, -shakeY)
+    shakeTime--
+    shakeX *= 0.9
+    shakeY *= 0.9
+}
+
+}
+
+function loop(){
+    frameSkip++
+    
+    // every other frame, cleanup
+    if(frameSkip % 30 === 0){
+        cleanupStale()
+    }
+    
+    update()
+    draw()
+
+    hue+=1
+    requestAnimationFrame(loop)
+}
+
+loop()
+
+function offRGB(){
+
+rgb=false
+document.getElementById("rgb").innerText="RGB OFF"
+
+}
+
+document.getElementById("drag").onclick=()=>{
+
+drag=!drag
+drag?dragBtn():dragOff()
+
+function dragBtn(){
+document.getElementById("drag").innerText="Drag ON"
+}
+
+function dragOff(){
+document.getElementById("drag").innerText="Drag OFF"
+}
+
+}
+
+// collisions are always enabled; button is informational only
+if(document.getElementById("collide")){
+    document.getElementById("collide").onclick=()=>{
+        // do nothing, collisions cannot be turned off
+    }
+}
+
+
+document.getElementById("rgb").onclick=()=>{
+
+rgb=!rgb
+
+if(rgb){
+
+saul=false
+ian=false
+
+document.getElementById("saul").innerText="Saul OFF"
+document.getElementById("ian").innerText="Ian OFF"
+
+}
+
+document.getElementById("rgb").innerText=
+rgb?"RGB ON":"RGB OFF"
+
+}
+
+document.getElementById("saul").onclick=()=>{
+
+saul=!saul
+
+if(saul){
+
+    offRGB()
+    // collisions always on
+
+}
+
+document.getElementById("saul").innerText=
+saul?"Saul ON":"Saul OFF"
+
+}
+
+document.getElementById("ian").onclick=()=>{
+
+ian=!ian
+
+if(ian){
+
+    offRGB()
+    // collisions always on
+
+}
+
+document.getElementById("ian").innerText=
+ian?"Ian ON":"Ian OFF"
+
+}
+
+document.getElementById("reset").onclick=()=>{
+
+balls=[]
+blocks=[]
+particles=[]
+explosionFlash = 0
+trail = []
+shakeX = 0
+shakeY = 0
+shakeTime = 0
+
+rgb=false
+saul=false
+ian=false
+drag=false
+collisions=true
+
+// reset stacking
+    columnStacks = []
+    columnLayers = []
+    nextCol = 0
+
+document.getElementById("rgb").innerText="RGB OFF"
+document.getElementById("saul").innerText="Saul OFF"
+document.getElementById("ian").innerText="Ian OFF"
+document.getElementById("drag").innerText="Drag OFF"
+document.getElementById("collide").innerText="Collisions ON"
+
+}
+
+</script>
 </body>
 </html>
